@@ -1923,7 +1923,7 @@ public sealed class AccessTools(AccessMcpOptions options)
         public List<string> MissingFiles { get; } = [];
     }
 
-    private static DriftReport ClassifyDrift(string folder, ExportManifest manifest, IReadOnlyList<LiveModule> live)
+    internal static DriftReport ClassifyDrift(string folder, ExportManifest manifest, IReadOnlyList<LiveModule> live)
     {
         var report = new DriftReport();
         var liveByName = live.ToDictionary(m => m.Name, StringComparer.OrdinalIgnoreCase);

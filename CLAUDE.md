@@ -18,6 +18,7 @@ A Windows-only MCP stdio server for Microsoft Access databases.
   - `Vba*.cs`, `MdeBuilder.cs`, `ModalDialogWatcher.cs`, `NdjsonResults.cs`: harness internals
   - `AccessMcpOptions.cs`: every config option
   - `AccessDbPathPolicy.cs`: path normalisation and extension checks
+- `AccessMCP.Tests/`: `DigitalJeeves.MsAccessMCP.Tests.csproj`, the xUnit tests (see Build).
 - `tools/AccessMCP.VbeAddin/`: optional x86 C++ VBE add-in for exact compile diagnostics.
 - `scripts/`: PowerShell for building/registering the add-in and syncing embedded resources.
 
@@ -27,7 +28,15 @@ A Windows-only MCP stdio server for Microsoft Access databases.
 dotnet build DigitalJeeves.MsAccessMCP.slnx -c Debug -p:Platform=x64
 ```
 
-There is no test project yet. A build with zero warnings is the bar; don't introduce new ones.
+```powershell
+dotnet test DigitalJeeves.MsAccessMCP.slnx -c Debug -p:Platform=x64
+```
+
+Tests live in `AccessMCP.Tests/` (`DigitalJeeves.MsAccessMCP.Tests`, xUnit). They never start Access.
+Tests marked `[AceFact]` create a scratch `.accdb` through ADOX and skip when the ACE provider isn't
+available at the test process's bitness. A build with zero warnings is the bar; don't introduce new ones.
+A new write tool must be added to the ReadOnly table in `AccessToolsGatingTests`, or the coverage
+test fails.
 
 ## Rules for every change
 

@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.OleDb;
+using System.Globalization;
 
 namespace DigitalJeeves.MsAccessMCP.Core;
 
@@ -128,7 +129,9 @@ internal sealed class AccessOleDb(AccessMcpOptions options)
             connection.Open();
 
             var indexes = new List<IndexInfo>();
-            var restrictions = new object?[] { null, null, tableName, null, null };
+
+            // Indexes restrictions are TABLE_CATALOG, TABLE_SCHEMA, INDEX_NAME, TYPE, TABLE_NAME.
+            var restrictions = new object?[] { null, null, null, null, tableName };
 
             var schema = connection.GetOleDbSchemaTable(OleDbSchemaGuid.Indexes, restrictions);
             if (schema is null)
@@ -151,10 +154,12 @@ internal sealed class AccessOleDb(AccessMcpOptions options)
                     Table: table,
                     IsPrimaryKey: TryGetBool(row, "PRIMARY_KEY"),
                     IsUnique: TryGetBool(row, "UNIQUE"),
-                    Type: Convert.ToString(row["INDEX_TYPE"]) ?? string.Empty));
+                    Type: Convert.ToString(row["TYPE"], CultureInfo.InvariantCulture) ?? string.Empty));
             }
 
+            // The schema has one row per index column, so a multi-column index would repeat.
             return (IReadOnlyList<IndexInfo>)indexes
+                .Distinct()
                 .OrderBy(i => i.Table, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
                 .ToArray();

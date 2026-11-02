@@ -14,7 +14,18 @@ how to add entries.
   automation, VBA source management and the VBA test harness.
 - Optional x86 VBE add-in (`tools/AccessMCP.VbeAddin`) and its build, register and sync scripts.
 - Consumer README, developer guide and AI agent guidance (`CLAUDE.md`).
+- xUnit test project (`AccessMCP.Tests`), ported from the original AccessMCP tests and extended to cover
+  path policy, ReadOnly and COM gating for every write tool, export-folder drift classification, the MDE
+  cache, scratch workspaces, the OLE DB STA funnel, and OLE DB/DAO tools against a scratch `.accdb`.
 - MIT licence (`LICENSE`), also declared in the package metadata.
+
+### Fixed
+
+- `access_list_indexes` returned nothing when given `tableName` (the table name went into the OLE DB
+  index-name restriction) and threw on any database with an index (it read a nonexistent `INDEX_TYPE`
+  column; ACE calls it `TYPE`). A multi-column index is now listed once instead of once per column.
+- `access_vba_cache_clear` now refuses a `key` that isn't a 64-character hex cache key. Before, a key
+  such as `..\..\folder` resolved outside the cache directory and that directory was deleted.
 
 ### Removed
 

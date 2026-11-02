@@ -212,6 +212,13 @@ internal sealed class VbaMdeCache
 
     public (int Removed, long Freed) Clear(string? key, bool all)
     {
+        // The key arrives from the MCP caller and becomes a directory name. Refuse anything that isn't a
+        // key ComputeKey could have produced, so "..\" can never reach outside the cache.
+        if (!all && key is not null && !IsCacheKey(key))
+        {
+            throw new ArgumentException("Not a cache key. Keys are 64 hexadecimal characters, as listed by access_vba_cache_info.", nameof(key));
+        }
+
         var removed = 0;
         long freed = 0;
 
@@ -284,6 +291,8 @@ internal sealed class VbaMdeCache
     }
 
     private string EntryDirectory(string key) => Path.Combine(Root, "entries", key);
+
+    private static bool IsCacheKey(string key) => key.Length == 64 && key.All(char.IsAsciiHexDigit);
 
     private FileStream AcquireLock(string key)
     {

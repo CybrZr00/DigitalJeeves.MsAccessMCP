@@ -7,6 +7,7 @@ DigitalJeeves.MsAccessMCP.slnx
 AccessMCP/                 stdio MCP host (DigitalJeeves.MsAccessMCP.exe), Program.cs + sample config.json
 AccessMCP.Core/            DigitalJeeves.MsAccessMCP.Core: tool surface and the OLE DB / DAO / COM / VBA harness behind it
   Resources/               embedded VbaTestKit.bas and VbeCompileErrors.json
+AccessMCP.Tests/           DigitalJeeves.MsAccessMCP.Tests: xUnit tests, no Access process needed
 tools/AccessMCP.VbeAddin/  optional x86 C++ VBE add-in for exact compile diagnostics
 scripts/                   add-in build/register/test, resource sync scripts
 docs/                      this guide, the VBA harness reference, spike notes
@@ -28,6 +29,17 @@ CLAUDE.md                  AI agent guidance and the code invariants
 ```powershell
 dotnet build DigitalJeeves.MsAccessMCP.slnx -c Debug -p:Platform=x64
 ```
+
+Run the tests:
+
+```powershell
+dotnet test DigitalJeeves.MsAccessMCP.slnx -c Debug -p:Platform=x64
+```
+
+Most tests are pure logic. The `[AceFact]` ones in `AccessOleDbIntegrationTests` build a scratch
+`.accdb` in `%TEMP%` through ADOX and run the OLE DB and DAO tools against it; they skip when the ACE
+provider isn't installed at the test process's bitness (x64 ACE needs the x64 build above). Nothing
+starts Access, so COM, VBE and harness runs are still checked by hand.
 
 Run the host against a config file:
 
@@ -58,10 +70,13 @@ databases outside the repo and point `DefaultDatabasePath` at them from a local 
    specific about inputs, side effects and output.
 2. Normalise the path with `AccessDbPathPolicy.NormalizeAndValidate` (or `NormalizeComDatabasePath` for
    tools that accept `.mde`/`.accde`).
-3. If it writes, check `_options.ReadOnly` and refuse. If it needs Access, go through the COM runners.
+3. If it writes, check `_options.ReadOnly` and refuse, and add the tool to the ReadOnly table in
+   `AccessMCP.Tests/AccessToolsGatingTests.cs` (a coverage test fails until you do). If it needs
+   Access, go through the COM runners.
 4. Return indented JSON built with the shared `JsonOptions`.
-5. Add a line to `CHANGELOG.md` under `[Unreleased]`.
-6. Add the tool to the table in `README.md`.
+5. Add tests for any logic that runs without Access.
+6. Add a line to `CHANGELOG.md` under `[Unreleased]`.
+7. Add the tool to the table in `README.md`.
 
 The invariants in [CLAUDE.md](../CLAUDE.md#invariants-read-before-touching-com-ole-db-or-vba-code)
 cover threading, COM lifetime, the automation gate and the VBA harness rules. Read them before touching

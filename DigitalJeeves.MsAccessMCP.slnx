@@ -6,6 +6,9 @@
   <Project Path="AccessMCP.Core/DigitalJeeves.MsAccessMCP.Core.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>
+  <Project Path="AccessMCP.Tests/DigitalJeeves.MsAccessMCP.Tests.csproj">
+    <Platform Solution="*|x64" Project="x64" />
+  </Project>
   <Project Path="AccessMCP/DigitalJeeves.MsAccessMCP.csproj">
     <Platform Solution="*|x64" Project="x64" />
   </Project>

@@ -388,9 +388,8 @@ in normal Access sessions; the harness connects it on demand.
 ## 8. Testing AccessMCP itself
 
 - Unit tests (no Access): path policy, options, procedure/directive parsing, header normalisation,
-  runner generation, NDJSON parsing, cache-key stability, execution gating, doctor without COM.
-  This repo does not have a test project yet; `DigitalJeeves.MsAccessMCP.Tests` below is the expected
-  name (`DigitalJeeves.MsAccessMCP.Core.csproj` already grants it `InternalsVisibleTo`).
+  runner generation, NDJSON parsing, MDE cache keys and storage, scratch workspaces, execution
+  gating, doctor without COM. They live in `AccessMCP.Tests` (`DigitalJeeves.MsAccessMCP.Tests`).
 - Integration (manual/opt-in): create a scratch `.accdb`, ensure modules, compile, run, run tests
   (pass and deliberate fail), build an MDE, run the MDE, verify a cache hit and a timeout kill.
 - VBE add-in acceptance: `pwsh ./scripts/test-vbe-addin.ps1` asserts the exact line/module for a
@@ -398,7 +397,7 @@ in normal Access sessions; the harness connects it on demand.
   The plan's `ACCESS_MCP_VBA_TESTS=1` / `ACCESS_MCP_TEST_DB` gate is not wired into CI yet.
 
 ```powershell
-dotnet test DigitalJeeves.MsAccessMCP.Tests/DigitalJeeves.MsAccessMCP.Tests.csproj
+dotnet test AccessMCP.Tests/DigitalJeeves.MsAccessMCP.Tests.csproj -p:Platform=x64
 pwsh ./scripts/sync-vba-testkit.ps1 -Check
 ```
 
