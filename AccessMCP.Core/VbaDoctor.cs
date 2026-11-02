@@ -80,8 +80,6 @@ internal static class VbaDoctor
 
         var piaAvailable = IsPiaAvailable();
         var isRuntime = installation.IsRuntime && !vbe.Accessible;
-        var canEdit = installation.Installed && !isRuntime && vbe.Accessible && options.EnableComAutomation;
-        var canRun = installation.Installed && options.EnableVbaTestTools;
 
         return new VbaDoctorInfo(
             new VbaDoctorAccess(
@@ -99,13 +97,32 @@ internal static class VbaDoctor
             ace,
             ProbeStorage(scratchRoot),
             ProbeStorage(cacheRoot),
-            new VbaDoctorCapabilities(
-                canEdit,
-                canEdit,
-                canRun,
-                installation.Installed && !isRuntime && piaAvailable,
-                piaAvailable,
-                options.VbaMdeBuildStrategy));
+            Capabilities(options, installation.Installed, isRuntime, vbe.Accessible, piaAvailable));
+    }
+
+    /// <summary>
+    /// What the tools will actually allow. Each flag mirrors the gates the matching tools check before
+    /// starting Access, so the doctor never promises something the tool then refuses.
+    /// </summary>
+    internal static VbaDoctorCapabilities Capabilities(
+        AccessMcpOptions options,
+        bool accessInstalled,
+        bool isRuntime,
+        bool vbeAccessible,
+        bool piaAvailable)
+    {
+        // access_vba_ensure_module/remove_module/import_file and access_vba_compile write to the
+        // caller's database: EnableComAutomation and not ReadOnly.
+        var canEdit = accessInstalled && !isRuntime && vbeAccessible && options.EnableComAutomation && !options.ReadOnly;
+
+        // access_vba_run/eval/run_tests/test work on scratch copies: both switches, ReadOnly is irrelevant.
+        var canRun = accessInstalled && options.EnableComAutomation && options.EnableVbaTestTools;
+
+        // MDE builds go through the same execution gate. access_vba_build_mde is also refused when
+        // ReadOnly, but access_vba_test with mode="mde" builds in its scratch copy and still works.
+        var canBuildMde = canRun && !isRuntime && piaAvailable;
+
+        return new VbaDoctorCapabilities(canEdit, canEdit, canRun, canBuildMde, piaAvailable, options.VbaMdeBuildStrategy);
     }
 
     private static async Task<VbaDoctorVbe> ProbeVbeAsync(AccessMcpOptions options, string? databasePath, CancellationToken cancellationToken)

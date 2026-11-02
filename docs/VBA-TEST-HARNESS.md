@@ -72,6 +72,12 @@ Returns `access`, `host`, `database`, `vbe`, `ace`, `scratch`, `cache` and `capa
 (`canEditModules`, `canCompile`, `canRun`, `canBuildMde`, `piaAvailable`, `mdeStrategy`). Works with
 COM disabled.
 
+The capability flags follow the same switches the tools check. `canEditModules` and `canCompile` need
+`EnableComAutomation`, a trusted VBE and a server that isn't `ReadOnly`. `canRun` needs both
+`EnableComAutomation` and `EnableVbaTestTools`. `canBuildMde` needs what `canRun` needs plus the PIAs
+and a full (non-runtime) Access; `access_vba_build_mde` is still refused when `ReadOnly`, but
+`access_vba_test` with `mode="mde"` builds in its scratch copy and works.
+
 ### `access_vba_ensure_module`
 
 ```

@@ -46,6 +46,7 @@ public sealed class AccessToolsGatingTests : IDisposable
         ["access_add_report_control"] = (t, _, db) => t.AddReportControlAsync("rpt", "textbox", "ctl", databasePath: db),
         ["access_remove_report_control"] = (t, _, db) => t.RemoveReportControlAsync("rpt", "ctl", db),
         ["access_run_macro"] = (t, _, db) => t.RunMacroAsync("mcrMain", db),
+        ["access_do_cmd"] = (t, _, db) => t.DoCmdAsync("open_form", "frmMain", databasePath: db),
         ["access_vba_ensure_module"] = (_, v, db) => v.EnsureModuleAsync("Module1", "Sub A()\r\nEnd Sub", databasePath: db),
         ["access_vba_remove_module"] = (_, v, db) => v.RemoveModuleAsync("AccessMcpTemp", databasePath: db),
         ["access_vba_import_file"] = (_, v, db) => v.ImportFileAsync(@"C:\Data\Module1.bas", databasePath: db),
@@ -318,6 +319,27 @@ public sealed class AccessToolsGatingTests : IDisposable
         Assert.True(document.RootElement.TryGetProperty("capabilities", out var capabilities));
         Assert.False(capabilities.GetProperty("canEditModules").GetBoolean());
         Assert.False(capabilities.GetProperty("canRun").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Doctor_DoesNotPromiseRunsWhenComAutomationIsOff()
+    {
+        // EnableVbaTestTools alone is not enough: access_vba_run checks EnableComAutomation first.
+        var options = new AccessMcpOptions
+        {
+            EnableComAutomation = false,
+            EnableVbaTestTools = true,
+            VbaScratchDirectory = _dir.Combine("scratch"),
+            VbaCacheDirectory = _dir.Combine("cache")
+        };
+
+        using var document = JsonDocument.Parse(await new AccessVbaTools(options, NullLoggerFactory.Instance).DoctorAsync());
+        var capabilities = document.RootElement.GetProperty("capabilities");
+
+        Assert.False(capabilities.GetProperty("canRun").GetBoolean());
+        Assert.False(capabilities.GetProperty("canBuildMde").GetBoolean());
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new AccessVbaTools(options, NullLoggerFactory.Instance).RunAsync("Anything", databasePath: _dir.Touch("Sample.accdb")));
     }
 
     private AccessTools ToolsWithComDisabled(out string dbPath)

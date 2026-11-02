@@ -26,6 +26,9 @@ how to add entries.
   column; ACE calls it `TYPE`). A multi-column index is now listed once instead of once per column.
 - `access_vba_cache_clear` now refuses a `key` that isn't a 64-character hex cache key. Before, a key
   such as `..\..\folder` resolved outside the cache directory and that directory was deleted.
+- `access_vba_doctor` capabilities now match what the tools allow. `canRun` and `canBuildMde` were true
+  with `EnableComAutomation` off, although every run and build refuses without it; `canBuildMde` also
+  ignored `EnableVbaTestTools`; and `canEditModules`/`canCompile` were true on a `ReadOnly` server.
 
 ### Removed
 
@@ -33,6 +36,8 @@ how to add entries.
 
 ### Changed
 
+- `access_do_cmd` is now annotated as a write tool (`readOnlyHint` false) and is refused when
+  `ReadOnly` is true. Opening a form or report runs its event code, which can change data.
 - Renamed from `AccessMCP` to `DigitalJeeves.MsAccessMCP`. The NuGet package, Core assembly and
   namespace are now `DigitalJeeves.MsAccessMCP.Core` (were `AccessMCP.Core`), and the server exe is
   `DigitalJeeves.MsAccessMCP.exe` (was `AccessMCP.exe`). In-process hosts need

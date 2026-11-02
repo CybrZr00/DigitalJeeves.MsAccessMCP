@@ -65,7 +65,7 @@ Options are read from the first of these that exists:
 | `DefaultDatabasePath` | none | Used when a tool call omits `databasePath`. Environment variables are expanded. |
 | `OleDbProvider` | `Microsoft.ACE.OLEDB.16.0` | ACE provider name. |
 | `CommandTimeoutSeconds` | `30` | OLE DB command timeout. |
-| `ReadOnly` | `false` | Rejects every tool that writes: `access_execute`, form/report/control setters, module imports, compile, macros, VBA harness writers. |
+| `ReadOnly` | `false` | Rejects every tool that writes: `access_execute`, form/report/control setters, module imports, compile, macros, `access_do_cmd`, VBA harness writers. |
 | `EnableComAutomation` | `false` | Required for every form, report, macro, VBE and VBA tool. Launches Access. |
 | `SuppressStartupForm` | `true` | COM sessions remove the database's `StartUpForm` property while they work and put it back afterwards, so a start-up form can't block automation. This writes to the file even for read-only tools; set `false` to never touch it. |
 | `EnableVbaTestTools` | `false` | Enables `access_vba_run`, `_eval`, `_run_tests`, `_test`, `_build_mde`. These run arbitrary VBA. |

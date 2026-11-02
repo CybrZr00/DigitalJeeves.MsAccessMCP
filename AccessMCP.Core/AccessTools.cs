@@ -3147,8 +3147,8 @@ public sealed class AccessTools(AccessMcpOptions options)
         return JsonSerializer.Serialize(new { databasePath = dbPath, macroName, ran = true }, JsonOptions);
     }
 
-    [McpServerTool(Name = "access_do_cmd", Title = "Access: DoCmd", ReadOnly = true, Idempotent = false)]
-    [Description("Runs a limited set of DoCmd actions via COM automation.")]
+    [McpServerTool(Name = "access_do_cmd", Title = "Access: DoCmd", ReadOnly = false, Idempotent = false)]
+    [Description("Runs a limited set of DoCmd actions via COM automation. Opening a form or report runs its event code (Open, Load, Activate and so on), which can change data, so this is refused when the server is read-only.")]
     public async Task<string> DoCmdAsync(
         [Description("Action: open_form, close_form, open_report, close_report.")] string action,
         [Description("Object name.")] string objectName,
@@ -3157,6 +3157,11 @@ public sealed class AccessTools(AccessMcpOptions options)
         [Description("Path to .mdb/.accdb. If omitted, uses DefaultDatabasePath.")] string? databasePath = null,
         CancellationToken cancellationToken = default)
     {
+        if (_options.ReadOnly)
+        {
+            throw new InvalidOperationException("Server is configured as read-only.");
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(action);
         ArgumentException.ThrowIfNullOrWhiteSpace(objectName);
 
