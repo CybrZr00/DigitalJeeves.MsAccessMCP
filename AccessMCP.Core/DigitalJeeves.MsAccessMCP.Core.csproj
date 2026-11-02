@@ -1,0 +1,80 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+    The Access tool surface, split out of the MCP host exe so other .NET hosts can reference it
+    in-process without the subprocess/stdio JSON-RPC layer. DigitalJeeves.MsAccessMCP.csproj (the exe) references this
+    project and hosts it over stdio for standalone MCP clients.
+  -->
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Platforms>AnyCPU;x64</Platforms>
+		<IsPackable>true</IsPackable>
+		<PackageId>DigitalJeeves.MsAccessMCP.Core</PackageId>
+		<Version>1.1.0</Version>
+		<Authors>Digital Jeeves</Authors>
+		<Copyright>Copyright (c) 2026 Digital Jeeves</Copyright>
+		<Description>MCP tool library for Microsoft Access databases: OLE DB data access, Access COM automation, VBA source management and a VBA test harness. Windows only.</Description>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageTags>mcp;model-context-protocol;microsoft-access;vba;oledb</PackageTags>
+		<DebugType>embedded</DebugType>
+		<!-- The VBA kit is the only embedded resource; disable the default glob so the .bas file is
+		     included explicitly with a stable logical name. -->
+		<EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- The pure diff/classification logic in DatabaseDiff.cs is internal by design; the tests exercise
+             it directly rather than through a real Access database. -->
+		<InternalsVisibleTo Include="DigitalJeeves.MsAccessMCP.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Dapper" Version="2.1.89" />
+		<PackageReference Include="ModelContextProtocol" Version="2.3.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+		<PackageReference Include="System.Data.OleDb" Version="10.0.14" />
+		<PackageReference Include="Serilog" Version="4.4.0" />
+		<!-- Early-bound Access interop is required for SysCmd(603, source, target): a late-bound call
+		     with the same integer silently does nothing on this build. The NuGet PIA has a
+		     netstandard2.0 build, so no build-time COM type library (and no ResolveComReference,
+		     which .NET Core MSBuild does not support) is needed. -->
+		<PackageReference Include="Microsoft.Office.Interop.Access" Version="15.0.4420.1018" />
+	</ItemGroup>
+
+	<!-- The kit is embedded explicitly with a stable logical name; the default resource glob is
+	     disabled above. -->
+
+	<ItemGroup>
+		<EmbeddedResource Include="Resources\VbaTestKit.bas" LogicalName="AccessMCP.Resources.VbaTestKit.bas" />
+		<EmbeddedResource Include="Resources\VbeCompileErrors.json" LogicalName="AccessMCP.Resources.VbeCompileErrors.json" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+		<!-- The Access PIA is not self-contained: it references the Office, DAO and VBE PIAs, which
+		     ship with Office in the .NET Framework GAC rather than on NuGet. Referencing them here
+		     (and copying them to the output) is what makes the early-bound Application.SysCmd call
+		     work on .NET. Without Office installed these references are skipped and the MDE builder
+		     reports unavailable instead of failing the build. -->
+		<Reference Include="office" Condition="Exists('$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\OFFICE.DLL')">
+			<HintPath>$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\OFFICE.DLL</HintPath>
+			<Private>true</Private>
+		</Reference>
+		<Reference Include="Microsoft.Office.Interop.Access.Dao" Condition="Exists('$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Access.Dao\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Access.Dao.dll')">
+			<HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Access.Dao\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Access.Dao.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+		<Reference Include="Microsoft.Vbe.Interop" Condition="Exists('$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll')">
+			<HintPath>$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll</HintPath>
+			<Private>true</Private>
+		</Reference>
+
+		<!-- Deploy the PIAs next to the host. A ProjectReference does not copy plain <Reference>
+		     items from the referenced project, so they are also content items. -->
+		<None Include="$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\OFFICE.DLL" Link="office.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" Condition="Exists('$(WINDIR)\assembly\GAC_MSIL\office\15.0.0.0__71e9bce111e9429c\OFFICE.DLL')" />
+		<None Include="$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Access.Dao\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Access.Dao.dll" Link="Microsoft.Office.Interop.Access.Dao.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" Condition="Exists('$(WINDIR)\assembly\GAC_MSIL\Microsoft.Office.Interop.Access.Dao\15.0.0.0__71e9bce111e9429c\Microsoft.Office.Interop.Access.Dao.dll')" />
+		<None Include="$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll" Link="Microsoft.Vbe.Interop.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" Condition="Exists('$(WINDIR)\assembly\GAC_MSIL\Microsoft.Vbe.Interop\15.0.0.0__71e9bce111e9429c\Microsoft.Vbe.Interop.dll')" />
+	</ItemGroup>
+
+</Project>

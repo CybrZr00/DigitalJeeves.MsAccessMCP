@@ -1,0 +1,15 @@
+{
+  "DefaultDatabasePath": null,
+  "OleDbProvider": "Microsoft.ACE.OLEDB.16.0",
+  "CommandTimeoutSeconds": 30,
+  "ReadOnly": false,
+  "EnableComAutomation": true,
+  "EnableVbaTestTools": false,
+  "VbaScratchDirectory": "%TEMP%\\AccessMCP.VbaTest",
+  "VbaCacheDirectory": "%LOCALAPPDATA%\\AccessMCP\\VbaTest\\cache",
+  "VbaTimeoutSeconds": 120,
+  "VbaCompileTimeoutSeconds": 60,
+  "VbaMdeBuildStrategy": "syscmd",
+  "VbaCacheEnabled": true,
+  "KeepVbaArtifacts": false
+}

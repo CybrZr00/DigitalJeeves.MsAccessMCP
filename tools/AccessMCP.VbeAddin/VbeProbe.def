@@ -1,0 +1,6 @@
+LIBRARY AccessMCP.VbeProbe
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE
+    DllRegisterServer PRIVATE
+    DllUnregisterServer PRIVATE
