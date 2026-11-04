@@ -282,7 +282,11 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
         using var workspace = request.InPlace
             ? VbaWorkspace.CreateInPlace(_options, source, createMdePath: mode == "mde")
             : VbaWorkspace.Create(_options, source, createMdePath: mode == "mde");
-        workspace.Keep = request.KeepArtifacts || _options.KeepVbaArtifacts;
+
+        // In place, the module backups written into the artifact directory are the only copy of
+        // what the run is about to overwrite in the caller's database, so they must survive even
+        // a successful run.
+        workspace.Keep = request.KeepArtifacts || _options.KeepVbaArtifacts || request.InPlace;
         workspace.Log($"scenario start mode={mode} strategy={strategy} source={source} inPlace={request.InPlace}");
 
         var prepared = default(VbaPrepareInfo);

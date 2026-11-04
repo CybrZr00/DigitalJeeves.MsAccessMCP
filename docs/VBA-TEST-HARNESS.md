@@ -256,7 +256,9 @@ Executing VBA is equivalent to code execution with the user's privileges. There 
 - Every execution tool copies by default. `inPlace: true` works on the database itself: changes
   persist, nothing is rolled back, and `access_vba_run_tests` / `access_vba_test` remove their
   injected `AccessMcpTestKit` / `AccessMcpTestRunner` modules afterwards. If that cleanup fails it is
-  logged in the artifact directory rather than thrown. Use in-place deliberately, not as a default.
+  logged in the artifact directory rather than thrown. The artifact directory is always kept for
+  an in-place scenario run, because it holds the backups of any module the run overwrites in your
+  database. Use in-place deliberately, not as a default.
 - `AutomationSecurity` is set to `msoAutomationSecurityLow` for the scratch session. The database's
   own startup code, `AutoExec` macro and startup form can run; the StartUpForm property is removed
   from the **MDB copy** before compiling/building and restored only in the copy.
@@ -429,6 +431,7 @@ pwsh ./scripts/sync-vba-testkit.ps1 -Check
 | "Office PIAs must be deployed next to the MCP host" | Build on a machine with Access installed; `office.dll`, `Microsoft.Office.Interop.Access.Dao.dll` and `Microsoft.Vbe.Interop.dll` must be in the output |
 | Tests hang | A test opened a modal dialog or loops. The watchdog kills Access after `timeoutSeconds`; use `keepArtifacts` to inspect `result.ndjson` |
 | `access_vba_compile` has no module/line | The VBE add-in is not registered: run `scripts/register-vbe-addin.ps1`; diagnostics fall back to the caret/dialog |`n| A form MDE returns no parameters | Legacy VBAStack only called `ITypeLib::GetTypeInfo(0)`, so it resolved the standard module, never the form. Current VBAStack uses `epiModule+2` and `GetTypeAttr` to resolve the module's `epiModule+0xC` FIXUP; direct form calls then work. `Forms(name).Name` is a fallback for older builds. |
+
 
 
 
