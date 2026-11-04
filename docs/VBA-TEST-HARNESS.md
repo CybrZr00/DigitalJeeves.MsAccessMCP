@@ -9,7 +9,9 @@ against a scratch copy of an `.mdb`/`.accdb` and against a compiled `.mde`/`.acc
 harness. It is complementary to `vba-MCP`: that tool runs VBA in a standalone VBE host with no host
 object model; this one has the full Access object model and can build MDEs.
 
-The developer's database is never modified: every scenario copies it to a scratch workspace first.
+The developer's database is not modified by default: every scenario copies it to a scratch workspace
+first. Each execution tool also takes `inPlace: true`, which runs against the database itself so
+its changes persist; see [5. Security](#5-security) for what that means.
 
 ---
 
@@ -125,23 +127,25 @@ instead of an unconditional `compiled: true`.
 ### `access_vba_run`
 
 ```
-procedure, args?, timeoutSeconds?, databasePath?
+procedure, args?, timeoutSeconds?, databasePath?, inPlace=false
 → { ok, procedure, elapsedMs, result: { type, text, json? }, error, crashed, exitCode, timedOut,
     logTail, dialogText, artifactsKept, artifactDirectory }
 ```
 
-Runs in a scratch copy. Access's `Application.Run` accepts **unqualified** procedure names;
+Runs in a scratch copy by default; `inPlace: true` runs against the database itself and its changes
+persist. Access's `Application.Run` accepts **unqualified** procedure names;
 `Module.Procedure` is accepted by the API and the module part is used for validation, but the call
 is made unqualified. `ByRef` parameters are inbound-only: COM does not copy changes back.
 
 ### `access_vba_eval`
 
-`Application.Eval` in a scratch copy, same result shape.
+`Application.Eval` in a scratch copy, same result shape. `inPlace: true` evaluates in the database
+itself.
 
 ### `access_vba_run_tests`
 
 ```
-tests?: string[], timeoutSeconds?, keepArtifacts?, databasePath?
+tests?: string[], timeoutSeconds?, keepArtifacts?, databasePath?, inPlace=false
 → { ok, total, passed, failed, skipped, xfailed, xpassed, tests: [...], logTail, error,
     timedOut, crashed, exitCode, elapsedMs, dialogText, artifactsKept, artifactDirectory }
 ```
@@ -167,11 +171,12 @@ pwsh ./scripts/sync-vba-testkit.ps1 -Check   # CI drift check
 ### `access_vba_build_mde`
 
 ```
-databasePath, outputPath?, strategy="syscmd"|"prebuilt", decompileFirst?, timeoutSeconds?
+databasePath, outputPath?, strategy="syscmd"|"prebuilt", decompileFirst?, timeoutSeconds?, inPlace=false
 → { ok, strategy, sourcePath, outputPath, verified, manualRequired, error }
 ```
 
-Builds from a scratch copy; the source is untouched. `syscmd` compiles the copy, closes it, and calls
+Builds from a scratch copy; the source is untouched. `inPlace: true` compiles the database itself
+(the output still goes to `outputPath`). `syscmd` compiles the copy, closes it, and calls
 `SysCmd(603, source, target)` **on the same Access instance** (see 7). `prebuilt` copies an existing
 `.mde`/`.accde` instead. The output path is used verbatim; the default is the source name with
 `.mde`/`.accde` beside the source.
@@ -193,7 +198,8 @@ continueOnCompileError=false, keepArtifacts=false, timeoutSeconds?, inPlace=fals
 
 The end-to-end entry point. If `entryPoint` is omitted and `'@test` procedures are found, the
 generated runner is used. `mode=mdb` runs the entry point in the prepared MDB; `mode=mde` builds (or
-reuses a cached) MDE and runs it. `inPlace` is reserved and rejected in v1.
+reuses a cached) MDE and runs it. `inPlace=true` prepares the database itself; modules you supply
+persist, and the harness removes the kit/runner it injected before returning.
 
 Example:
 
@@ -247,7 +253,10 @@ Executing VBA is equivalent to code execution with the user's privileges. There 
 
 - The execution tools are behind `EnableVbaTestTools`, default **false**, independent of
   `EnableComAutomation`.
-- All scenarios work on scratch copies. `inPlace` is not implemented.
+- Every execution tool copies by default. `inPlace: true` works on the database itself: changes
+  persist, nothing is rolled back, and `access_vba_run_tests` / `access_vba_test` remove their
+  injected `AccessMcpTestKit` / `AccessMcpTestRunner` modules afterwards. If that cleanup fails it is
+  logged in the artifact directory rather than thrown. Use in-place deliberately, not as a default.
 - `AutomationSecurity` is set to `msoAutomationSecurityLow` for the scratch session. The database's
   own startup code, `AutoExec` macro and startup form can run; the StartUpForm property is removed
   from the **MDB copy** before compiling/building and restored only in the copy.
@@ -420,3 +429,6 @@ pwsh ./scripts/sync-vba-testkit.ps1 -Check
 | "Office PIAs must be deployed next to the MCP host" | Build on a machine with Access installed; `office.dll`, `Microsoft.Office.Interop.Access.Dao.dll` and `Microsoft.Vbe.Interop.dll` must be in the output |
 | Tests hang | A test opened a modal dialog or loops. The watchdog kills Access after `timeoutSeconds`; use `keepArtifacts` to inspect `result.ndjson` |
 | `access_vba_compile` has no module/line | The VBE add-in is not registered: run `scripts/register-vbe-addin.ps1`; diagnostics fall back to the caret/dialog |`n| A form MDE returns no parameters | Legacy VBAStack only called `ITypeLib::GetTypeInfo(0)`, so it resolved the standard module, never the form. Current VBAStack uses `epiModule+2` and `GetTypeAttr` to resolve the module's `epiModule+0xC` FIXUP; direct form calls then work. `Forms(name).Name` is a fallback for older builds. |
+
+
+
