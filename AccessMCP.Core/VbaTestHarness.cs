@@ -125,14 +125,11 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
         string? entryPoint,
         IReadOnlyList<object?> args,
         int? timeoutSeconds,
-        CancellationToken cancellationToken,
-        bool inPlace = false)
+        CancellationToken cancellationToken)
     {
         var source = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
         var compiled = AccessDbPathPolicy.IsCompiledDatabase(source);
-        using var workspace = inPlace
-            ? VbaWorkspace.CreateInPlace(_options, source, createMdePath: false)
-            : VbaWorkspace.Create(_options, source, createMdePath: false);
+        using var workspace = VbaWorkspace.Create(_options, source, createMdePath: false);
         workspace.Keep = _options.KeepVbaArtifacts;
 
         var execution = await RunInWorkspaceAsync(
@@ -155,14 +152,11 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
         string databasePath,
         string expression,
         int? timeoutSeconds,
-        CancellationToken cancellationToken,
-        bool inPlace = false)
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expression);
         var source = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
-        using var workspace = inPlace
-            ? VbaWorkspace.CreateInPlace(_options, source, createMdePath: false)
-            : VbaWorkspace.Create(_options, source, createMdePath: false);
+        using var workspace = VbaWorkspace.Create(_options, source, createMdePath: false);
         workspace.Keep = _options.KeepVbaArtifacts;
 
         var com = new AccessComAutomation(_options);

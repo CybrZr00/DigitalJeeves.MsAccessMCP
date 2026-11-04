@@ -384,37 +384,35 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
     }
 
     [McpServerTool(Name = "access_vba_run", Title = "Access: VBA Run", ReadOnly = false, Idempotent = false)]
-    [Description("Runs a public VBA procedure and returns a structured result. By default it runs in a scratch copy; set inPlace=true to run against the database itself, so its changes persist. Access's Application.Run takes unqualified procedure names; a 'Module.Procedure' entry point is accepted and the module part is used for validation. Requires EnableVbaTestTools.")]
+    [Description("Runs a public VBA procedure in a scratch copy of the database and returns a structured result. Access's Application.Run takes unqualified procedure names; a 'Module.Procedure' entry point is accepted and the module part is used for validation. Requires EnableVbaTestTools.")]
     public async Task<string> RunAsync(
         [Description("Public procedure name, optionally 'Module.Procedure'.")] string procedure,
         [Description("Optional JSON array of arguments.")] JsonElement? args = null,
         [Description("Timeout in seconds. Defaults to VbaTimeoutSeconds.")] int? timeoutSeconds = null,
         [Description("Path to .mdb/.accdb/.mde/.accde. If omitted, uses DefaultDatabasePath.")] string? databasePath = null,
-        [Description("Run against the database itself instead of a scratch copy. Changes persist, nothing is rolled back. Default false.")] bool inPlace = false,
         CancellationToken cancellationToken = default)
     {
         RequireVbaExecution();
         ArgumentException.ThrowIfNullOrWhiteSpace(procedure);
 
         var dbPath = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
-        var run = await _harness.RunProcedureAsync(dbPath, procedure, ParseArguments(args), timeoutSeconds, cancellationToken, inPlace);
+        var run = await _harness.RunProcedureAsync(dbPath, procedure, ParseArguments(args), timeoutSeconds, cancellationToken);
         return JsonSerializer.Serialize(run, JsonOptions);
     }
 
     [McpServerTool(Name = "access_vba_eval", Title = "Access: VBA Eval", ReadOnly = false, Idempotent = false)]
-    [Description("Evaluates a VBA expression with Application.Eval. By default in a scratch copy; set inPlace=true to evaluate against the database itself. Requires EnableVbaTestTools.")]
+    [Description("Evaluates a VBA expression with Application.Eval in a scratch copy of the database. Requires EnableVbaTestTools.")]
     public async Task<string> EvalAsync(
         [Description("VBA expression, for example 2*21 or SomeFunction().")] string expression,
         [Description("Timeout in seconds. Defaults to VbaTimeoutSeconds.")] int? timeoutSeconds = null,
         [Description("Path to .mdb/.accdb/.mde/.accde. If omitted, uses DefaultDatabasePath.")] string? databasePath = null,
-        [Description("Evaluate against the database itself instead of a scratch copy. Default false.")] bool inPlace = false,
         CancellationToken cancellationToken = default)
     {
         RequireVbaExecution();
         ArgumentException.ThrowIfNullOrWhiteSpace(expression);
 
         var dbPath = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
-        var run = await _harness.EvalAsync(dbPath, expression, timeoutSeconds, cancellationToken, inPlace);
+        var run = await _harness.EvalAsync(dbPath, expression, timeoutSeconds, cancellationToken);
         return JsonSerializer.Serialize(run, JsonOptions);
     }
 
