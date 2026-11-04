@@ -384,19 +384,20 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
     }
 
     [McpServerTool(Name = "access_vba_run", Title = "Access: VBA Run", ReadOnly = false, Idempotent = false)]
-    [Description("Runs a public VBA procedure in a scratch copy of the database and returns a structured result. Access's Application.Run takes unqualified procedure names; a 'Module.Procedure' entry point is accepted and the module part is used for validation. Requires EnableVbaTestTools.")]
+    [Description("Runs a public VBA procedure and returns a structured result. By default in a scratch copy, which isolates the front-end file (linked tables still see the real data); set inPlace=true to run against the database itself, for executing existing code against real data. Nothing is rolled back. Access's Application.Run takes unqualified procedure names; a 'Module.Procedure' entry point is accepted and the module part is used for validation. Requires EnableVbaTestTools.")]
     public async Task<string> RunAsync(
         [Description("Public procedure name, optionally 'Module.Procedure'.")] string procedure,
         [Description("Optional JSON array of arguments.")] JsonElement? args = null,
         [Description("Timeout in seconds. Defaults to VbaTimeoutSeconds.")] int? timeoutSeconds = null,
         [Description("Path to .mdb/.accdb/.mde/.accde. If omitted, uses DefaultDatabasePath.")] string? databasePath = null,
+        [Description("Run against the database itself instead of a scratch copy, so the procedure's changes persist. Default false.")] bool inPlace = false,
         CancellationToken cancellationToken = default)
     {
         RequireVbaExecution();
         ArgumentException.ThrowIfNullOrWhiteSpace(procedure);
 
         var dbPath = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
-        var run = await _harness.RunProcedureAsync(dbPath, procedure, ParseArguments(args), timeoutSeconds, cancellationToken);
+        var run = await _harness.RunProcedureAsync(dbPath, procedure, ParseArguments(args), timeoutSeconds, cancellationToken, inPlace);
         return JsonSerializer.Serialize(run, JsonOptions);
     }
 
