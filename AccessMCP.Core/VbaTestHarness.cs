@@ -125,12 +125,15 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
         string? entryPoint,
         IReadOnlyList<object?> args,
         int? timeoutSeconds,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool inPlace = false)
     {
         var source = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
         var compiled = AccessDbPathPolicy.IsCompiledDatabase(source);
-        using var workspace = VbaWorkspace.Create(_options, source, createMdePath: false);
-        workspace.Keep = _options.KeepVbaArtifacts;
+        using var workspace = inPlace
+            ? VbaWorkspace.CreateInPlace(_options, source, createMdePath: false)
+            : VbaWorkspace.Create(_options, source, createMdePath: false);
+        workspace.Keep = _options.KeepVbaArtifacts || inPlace;
 
         var execution = await RunInWorkspaceAsync(
             workspace,
@@ -195,7 +198,8 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
         IReadOnlyList<string>? tests,
         int? timeoutSeconds,
         bool keepArtifacts,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool inPlace = false)
     {
         var source = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
         if (AccessDbPathPolicy.IsCompiledDatabase(source))
@@ -204,7 +208,9 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
                 "Tests cannot be injected into a compiled database. Use access_vba_test with mode 'mde' and the 'syscmd' strategy so the runner is baked in before the build.");
         }
 
-        using var workspace = VbaWorkspace.Create(_options, source, createMdePath: false);
+        using var workspace = inPlace
+            ? VbaWorkspace.CreateInPlace(_options, source, createMdePath: false)
+            : VbaWorkspace.Create(_options, source, createMdePath: false);
         workspace.Keep = keepArtifacts || _options.KeepVbaArtifacts;
 
         var (run, summary, prepare) = await PrepareAndRunAsync(
@@ -215,6 +221,11 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
             tests,
             timeoutSeconds,
             cancellationToken).ConfigureAwait(false);
+
+        if (inPlace)
+        {
+            await RemoveInjectedModulesAsync(source, workspace, cancellationToken).ConfigureAwait(false);
+        }
 
         workspace.Cleanup(keepOnFailure: true, failed: !run.Ok || summary is { Ok: false });
         run = run with
@@ -228,11 +239,6 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
 
     public async Task<VbaScenarioInfo> RunScenarioAsync(VbaScenarioRequest request, CancellationToken cancellationToken)
     {
-        if (request.InPlace)
-        {
-            throw new NotSupportedException("inPlace runs are not implemented; the harness only works on a scratch copy.");
-        }
-
         var source = AccessDbPathPolicy.NormalizeComDatabasePath(request.DatabasePath, _options);
         var mode = request.Mode.Trim().ToLowerInvariant();
         if (mode is not ("mdb" or "mde"))
@@ -270,9 +276,15 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
                 nameof(request));
         }
 
-        using var workspace = VbaWorkspace.Create(_options, source, createMdePath: mode == "mde");
-        workspace.Keep = request.KeepArtifacts || _options.KeepVbaArtifacts;
-        workspace.Log($"scenario start mode={mode} strategy={strategy} source={source}");
+        using var workspace = request.InPlace
+            ? VbaWorkspace.CreateInPlace(_options, source, createMdePath: mode == "mde")
+            : VbaWorkspace.Create(_options, source, createMdePath: mode == "mde");
+
+        // In place, the module backups written into the artifact directory are the only copy of
+        // what the run is about to overwrite in the caller's database, so they must survive even
+        // a successful run.
+        workspace.Keep = request.KeepArtifacts || _options.KeepVbaArtifacts || request.InPlace;
+        workspace.Log($"scenario start mode={mode} strategy={strategy} source={source} inPlace={request.InPlace}");
 
         var prepared = default(VbaPrepareInfo);
         VbaRunInfo? run = null;
@@ -330,6 +342,13 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
             workspace.Log("scenario failed: " + ex);
         }
 
+        // In-place runs leave the harness's own modules behind otherwise; strip them before the
+        // result is assembled so the caller's database is not polluted.
+        if (request.InPlace)
+        {
+            await RemoveInjectedModulesAsync(source, workspace, cancellationToken).ConfigureAwait(false);
+        }
+
         var ok = error is null &&
                  prepared?.Compile?.Ok != false &&
                  prepared?.Mde?.Ok != false &&
@@ -357,13 +376,70 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
             error);
     }
 
+    /// <summary>
+    /// An in-place test/scenario run injects AccessMcpTestKit and AccessMcpTestRunner into the
+    /// caller's own database. Remove them afterwards so the database is left as it was found,
+    /// apart from the changes the run was meant to make. Failures are logged, not thrown: the
+    /// run itself has already produced its result.
+    /// </summary>
+    private async Task RemoveInjectedModulesAsync(string databasePath, VbaWorkspace workspace, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var com = new AccessComAutomation(_options);
+            var outcome = await com.RunInAccessWithWatchdogAsync(
+                databasePath,
+                app =>
+                {
+                    dynamic dynamicApp = app;
+                    object? vbe = null;
+                    object? project = null;
+                    try
+                    {
+                        vbe = dynamicApp.VBE;
+                        project = VbaProjectEditor.GetProject(vbe!, null);
+
+                        var removed = 0;
+                        foreach (var name in new[] { VbaTestKit.RunnerModuleName, VbaTestKit.ModuleName })
+                        {
+                            if (VbaProjectEditor.RemoveModule(project, name, onlyHarnessModules: true))
+                            {
+                                removed++;
+                            }
+                        }
+
+                        if (removed > 0)
+                        {
+                            VbaProjectEditor.CompileAndSave((object)app);
+                        }
+
+                        return removed;
+                    }
+                    finally
+                    {
+                        AccessComAutomation.ReleaseComObject(project);
+                        AccessComAutomation.ReleaseComObject(vbe);
+                    }
+                },
+                new AccessRunOptions { Timeout = Timeout(null) },
+                cancellationToken).ConfigureAwait(false);
+
+            workspace.Log($"in-place module cleanup removed={outcome.Value}");
+        }
+        catch (Exception ex)
+        {
+            workspace.Log("in-place module cleanup failed: " + ex.Message);
+        }
+    }
+
     public async Task<MdeBuildResult> BuildMdeAsync(
         string databasePath,
         string? outputPath,
         string strategy,
         bool decompileFirst,
         int? timeoutSeconds,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool inPlace = false)
     {
         var source = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
         var resolvedStrategy = string.IsNullOrWhiteSpace(strategy) ? _options.VbaMdeBuildStrategy : strategy;
@@ -383,7 +459,9 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
                 "Cannot build an MDE from an already compiled database.");
         }
 
-        using var workspace = VbaWorkspace.Create(_options, source, createMdePath: true);
+        using var workspace = inPlace
+            ? VbaWorkspace.CreateInPlace(_options, source, createMdePath: true)
+            : VbaWorkspace.Create(_options, source, createMdePath: true);
         workspace.Keep = _options.KeepVbaArtifacts;
 
         if (decompileFirst || _options.VbaDecompileFirst)
@@ -1182,3 +1260,5 @@ internal sealed class VbaTestHarness(AccessMcpOptions options, ILoggerFactory lo
 
     internal sealed record BuildExecution(VbaCompileResult Compile, MdeBuildResult? Build);
 }
+
+

@@ -113,5 +113,59 @@ public sealed class VbaWorkspaceTests : IDisposable
         Assert.Contains("is open", exception.Message);
     }
 
+    [Fact]
+    public void CreateInPlaceWorksOnTheSourceAndMakesNoCopy()
+    {
+        var source = _dir.Touch("Sample.accdb", [1, 2, 3]);
+
+        using var workspace = VbaWorkspace.CreateInPlace(Options(), source, createMdePath: true);
+
+        Assert.True(workspace.InPlace);
+        Assert.Equal(Path.GetFullPath(source), workspace.WorkDatabasePath);
+        Assert.True(Directory.Exists(workspace.Directory));
+        Assert.StartsWith(_dir.Combine("scratch"), workspace.Directory);
+        Assert.Equal("out.accde", Path.GetFileName(workspace.MdePath));
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(source));
+    }
+
+    [Fact]
+    public void CreateInPlaceCleanupDeletesOnlyTheArtifactDirectory()
+    {
+        var source = _dir.Touch("Sample.accdb", [9, 9, 9]);
+        var workspace = VbaWorkspace.CreateInPlace(Options(), source, createMdePath: false);
+        workspace.Log("hello");
+
+        workspace.Cleanup(keepOnFailure: false, failed: false);
+
+        Assert.True(workspace.Deleted);
+        Assert.False(Directory.Exists(workspace.Directory));
+        Assert.True(File.Exists(source));
+        Assert.Equal([9, 9, 9], File.ReadAllBytes(source));
+    }
+
+    [Fact]
+    public void CreateInPlaceDoesNotRequireExclusiveAccessToTheSource()
+    {
+        // The point of in-place is to let Access open that very file, so the exclusive-open
+        // probe used by Create must not apply.
+        var source = _dir.Touch("Locked.accdb");
+        using var lockStream = new FileStream(source, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        using var workspace = VbaWorkspace.CreateInPlace(Options(), source, createMdePath: false);
+
+        Assert.Equal(Path.GetFullPath(source), workspace.WorkDatabasePath);
+    }
+
+    [Fact]
+    public void CreateInPlaceRejectsAMissingDatabase()
+    {
+        var missing = _dir.Combine("Nope.accdb");
+
+        var exception = Assert.Throws<FileNotFoundException>(
+            () => VbaWorkspace.CreateInPlace(Options(), missing, createMdePath: false));
+
+        Assert.Contains("Nope.accdb", exception.Message);
+    }
+
     private AccessMcpOptions Options() => new() { VbaScratchDirectory = _dir.Combine("scratch") };
 }

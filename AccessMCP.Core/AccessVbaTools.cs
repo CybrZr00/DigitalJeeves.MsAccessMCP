@@ -384,19 +384,20 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
     }
 
     [McpServerTool(Name = "access_vba_run", Title = "Access: VBA Run", ReadOnly = false, Idempotent = false)]
-    [Description("Runs a public VBA procedure in a scratch copy of the database and returns a structured result. Access's Application.Run takes unqualified procedure names; a 'Module.Procedure' entry point is accepted and the module part is used for validation. Requires EnableVbaTestTools.")]
+    [Description("Runs a public VBA procedure and returns a structured result. By default in a scratch copy, which isolates the front-end file (linked tables still see the real data); set inPlace=true to run against the database itself, for executing existing code against real data. Nothing is rolled back. Access's Application.Run takes unqualified procedure names; a 'Module.Procedure' entry point is accepted and the module part is used for validation. Requires EnableVbaTestTools.")]
     public async Task<string> RunAsync(
         [Description("Public procedure name, optionally 'Module.Procedure'.")] string procedure,
         [Description("Optional JSON array of arguments.")] JsonElement? args = null,
         [Description("Timeout in seconds. Defaults to VbaTimeoutSeconds.")] int? timeoutSeconds = null,
         [Description("Path to .mdb/.accdb/.mde/.accde. If omitted, uses DefaultDatabasePath.")] string? databasePath = null,
+        [Description("Run against the database itself instead of a scratch copy, so the procedure's changes persist. Default false.")] bool inPlace = false,
         CancellationToken cancellationToken = default)
     {
         RequireVbaExecution();
         ArgumentException.ThrowIfNullOrWhiteSpace(procedure);
 
         var dbPath = AccessDbPathPolicy.NormalizeComDatabasePath(databasePath, _options);
-        var run = await _harness.RunProcedureAsync(dbPath, procedure, ParseArguments(args), timeoutSeconds, cancellationToken);
+        var run = await _harness.RunProcedureAsync(dbPath, procedure, ParseArguments(args), timeoutSeconds, cancellationToken, inPlace);
         return JsonSerializer.Serialize(run, JsonOptions);
     }
 
@@ -417,17 +418,18 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
     }
 
     [McpServerTool(Name = "access_vba_run_tests", Title = "Access: VBA Run Tests", ReadOnly = false, Idempotent = false)]
-    [Description("Runs public '@test procedures in a scratch copy of an .mdb/.accdb: discovers them through the VBE, injects the shared VbaTestKit and a generated runner, compiles, and returns pass/fail/skip counts plus per-test messages. Requires EnableVbaTestTools.")]
+    [Description("Runs public '@test procedures in an .mdb/.accdb: discovers them through the VBE, injects the shared VbaTestKit and a generated runner, compiles, and returns pass/fail/skip counts plus per-test messages. By default this happens on a scratch copy; set inPlace=true to run in the database itself (the injected modules are removed afterwards). Requires EnableVbaTestTools.")]
     public async Task<string> RunTestsAsync(
         [Description("Optional test names to run; a name may be 'Procedure' or 'Module.Procedure'.")] string[]? tests = null,
         [Description("Timeout in seconds. Defaults to VbaTimeoutSeconds.")] int? timeoutSeconds = null,
         [Description("Keep the scratch workspace (databases, result NDJSON, log).")] bool keepArtifacts = false,
         [Description("Path to .mdb/.accdb. If omitted, uses DefaultDatabasePath.")] string? databasePath = null,
+        [Description("Run against the database itself instead of a scratch copy. The harness removes its own injected modules afterwards. Default false.")] bool inPlace = false,
         CancellationToken cancellationToken = default)
     {
         RequireVbaExecution();
         var dbPath = AccessDbPathPolicy.NormalizeAndValidate(databasePath, _options);
-        var result = await _harness.RunTestsAsync(dbPath, tests, timeoutSeconds, keepArtifacts, cancellationToken);
+        var result = await _harness.RunTestsAsync(dbPath, tests, timeoutSeconds, keepArtifacts, cancellationToken, inPlace);
 
         return JsonSerializer.Serialize(new
         {
@@ -452,13 +454,14 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
     }
 
     [McpServerTool(Name = "access_vba_build_mde", Title = "Access: VBA Build MDE", ReadOnly = false, Idempotent = false)]
-    [Description("Builds a compiled .mde/.accde from an .mdb/.accdb on a scratch copy. Uses the headless early-bound SysCmd(603) route after compile and close. 'prebuilt' copies an existing compiled database instead. Requires EnableVbaTestTools.")]
+    [Description("Builds a compiled .mde/.accde from an .mdb/.accdb. By default on a scratch copy; set inPlace=true to compile the database itself. Uses the headless early-bound SysCmd(603) route after compile and close. 'prebuilt' copies an existing compiled database instead. Requires EnableVbaTestTools.")]
     public async Task<string> BuildMdeAsync(
         [Description("Source .mdb/.accdb (or .mde/.accde for the prebuilt strategy).")] string databasePath,
         [Description("Output path. Defaults to the source name with .mde/.accde beside the source.")] string? outputPath = null,
         [Description("'syscmd' or 'prebuilt'. Defaults to VbaMdeBuildStrategy.")] string? strategy = null,
         [Description("Run MSACCESS.EXE /compact /decompile on the copy before compiling. Defaults to VbaDecompileFirst.")] bool? decompileFirst = null,
         [Description("Timeout in seconds. Defaults to VbaTimeoutSeconds.")] int? timeoutSeconds = null,
+        [Description("Build from the database itself instead of a scratch copy (it is compiled in the process). Default false.")] bool inPlace = false,
         CancellationToken cancellationToken = default)
     {
         RequireVbaExecution();
@@ -471,7 +474,8 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
             strategy ?? _options.VbaMdeBuildStrategy,
             decompileFirst ?? _options.VbaDecompileFirst,
             timeoutSeconds,
-            cancellationToken);
+            cancellationToken,
+            inPlace);
 
         return JsonSerializer.Serialize(result, JsonOptions);
     }
@@ -502,7 +506,7 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
     }
 
     [McpServerTool(Name = "access_vba_test", Title = "Access: VBA Test Scenario", ReadOnly = false, Idempotent = false)]
-    [Description("End-to-end VBA scenario: copy the database, inject modules, compile, optionally build an MDE with SysCmd(603), run an entry point or the generated test runner, and return structured prepare/run/test results. The source database is never modified. Requires EnableVbaTestTools.")]
+    [Description("End-to-end VBA scenario: copy the database, inject modules, compile, optionally build an MDE with SysCmd(603), run an entry point or the generated test runner, and return structured prepare/run/test results. By default the source database is never modified; set inPlace=true to work on it directly (modules you supply persist, and the harness removes its own injected kit/runner afterwards). Requires EnableVbaTestTools.")]
     public async Task<string> TestAsync(
         [Description("Source .mdb/.accdb (or .mde/.accde for mode='mde' with mdeStrategy='prebuilt').")] string databasePath,
         [Description("Modules to write: [{ name, kind: 'standard'|'class', source }] or [{ name, kind, filePath }].")] JsonElement? modules = null,
@@ -516,7 +520,7 @@ public sealed class AccessVbaTools(AccessMcpOptions options, ILoggerFactory logg
         [Description("MDB only: run even when the compile gate fails. Access can still run an unbroken procedure.")] bool continueOnCompileError = false,
         [Description("Keep the scratch workspace.")] bool keepArtifacts = false,
         [Description("Timeout in seconds. Defaults to VbaTimeoutSeconds.")] int? timeoutSeconds = null,
-        [Description("Reserved. v1 only supports scratch copies.")] bool inPlace = false,
+        [Description("Run against the database itself instead of a scratch copy. Modules you inject persist; the harness removes its own test kit/runner afterwards. Default false.")] bool inPlace = false,
         CancellationToken cancellationToken = default)
     {
         RequireVbaExecution();
